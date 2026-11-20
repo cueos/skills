@@ -1,16 +1,16 @@
 ---
 name: firebase-crashlytics
-description: Access Firebase Crashlytics and investigate missing iOS dSYMs. Use for Firebase console access, missing-symbol alerts, UUID matching, and checking symbol uploads for Cue OS or another Firebase app.
+description: Access Firebase Crashlytics, investigate missing iOS dSYMs, and read Android crash alerts. Use for Firebase console access, missing-symbol alerts, UUID matching, checking symbol uploads, and Android alerts with unreadable r8-map-id titles, for Cue OS or another Firebase app.
 ---
 
 # Firebase Crashlytics
 
 Use an existing authenticated browser session to inspect Crashlytics. For Cue
-OS, open [the iOS dashboard](https://console.firebase.google.com/project/cue-os/crashlytics/app/ios:ai.cueos.app/issues).
+OS, open [the iOS dashboard](https://console.firebase.google.com/project/cue-os/crashlytics/app/ios:ai.cueos.app/issues)
+or [the Android dashboard](https://console.firebase.google.com/project/cue-os/crashlytics/app/android:ai.cueos.app/issues).
 Confirm the project is `cue-os` and the app is `ai.cueos.app`; the app selector
-shows **Cue OS**. On the workspace Mac mini x, the existing Firebase session
-is in Chrome’s **Zhaolong** profile. Browser profile and Google account
-selection are local machine facts: inspect the available browser sessions and the account displayed
+shows **Cue OS**. Browser profile and Google account selection are local
+machine facts: inspect the available browser sessions and the account displayed
 in the console. An authenticated session in a different profile may have
 different project access.
 
@@ -90,7 +90,63 @@ The exercised route uses an existing Firebase browser login and a resolved
 Firebase Swift package. First-time Google sign-in and manual browser ZIP
 uploads have not been walked.
 
+## Read an Android crash alert
+
+Crashlytics emails such as "Trending stability issues for <date> - Android
+<app id>" name the app, the version and build number, the crash and user
+counts, and one console link per issue. Note whether each issue is a crash or
+a non-fatal error: digests report both. These checks narrow an alert down even
+when nobody can open the console yet.
+
+- **Compare the build with what the store serves.** Development builds that
+  keep a default build number, often `1`, report to the same Crashlytics app
+  as store builds. But `1` is also a normal first release, so the number alone
+  can't tell test devices from customers. Compare it with the store's release
+  tracks (for Google Play, the Play Developer API's
+  `applications/<package>/tracks/<track>/releases`), the app ID, and the
+  project's build settings. Until the crashing build is found, treat test
+  traffic as a suspicion, not a finding.
+- **An `r8-map-id-<64 hex>` title suggests Crashlytics couldn't restore the
+  real names for that event.** Release builds shorten class and method names
+  with R8 to make the app smaller, and the build's mapping file lists the real
+  names. The title alone doesn't say why the mapping wasn't used: an upload
+  turned off for that build (`mappingFileUploadEnabled = false`), a failed
+  upload, or a build whose mapping never left the machine it was built on.
+- **Match a crash to its build.** Crash lines from the app's own code,
+  including the libraries built into it, name the build's map ID, as in
+  `at a.b.c(r8-map-id-<hex>:10)`; Android system lines keep normal file
+  names. The same ID is inside the app file and in the mapping file's
+  `# pg_map_id:` header line:
+
+  ```sh
+  unzip -p app.apk 'classes*.dex' | LC_ALL=C grep -a -o 'r8-map-id-[0-9a-f]\{64\}' | sort -u
+  ```
+
+  Emails cut the ID short: search for the part you can see, then confirm the
+  full ID before using a mapping. Search build outputs and saved test
+  evidence. A later build in the same folder replaces the earlier one, so a
+  missing ID doesn't prove the build never existed.
+- **Compare shortened names only within one mapping.** The same bug showed
+  different shortened names in two builds. To match crashes across builds,
+  compare the real class and method names from each build's own mapping, the
+  user action, and whether the build includes the fix.
+- **Look for earlier work.** Search the team's task records and recently
+  merged changes for the exception name. A crash that test builds hit is
+  often reproduced and fixed before the daily alert arrives.
+- **Try the API when the console is out of reach.** Crashlytics has a read
+  API at `firebasecrashlytics.googleapis.com` (`v1alpha` issues). It takes the
+  Firebase app ID, not the package name. A 403 `SERVICE_DISABLED` means the API
+  isn't turned on for the Google Cloud project behind your credentials.
+
+This section was walked on 2026-11-19 and 2026-11-20 for one alert, without
+console access: the build comparison (including the Play releases call), the
+map ID search, the search for earlier work, and the Crashlytics API call, which
+returned 403 `SERVICE_DISABLED`. Not walked: reading Android issues in the
+console or through a working API, Firebase's MCP tools for Crashlytics, and
+turning crash lines back into real names with R8's `retrace` tool.
+
 ## Sources
 
 - [Firebase: readable Apple crash reports](https://firebase.google.com/docs/crashlytics/ios/get-deobfuscated-reports)
 - [Apple: locating a missing debug symbol file](https://developer.apple.com/documentation/xcode/locating-a-missing-debug-symbol-file)
+- [Firebase: readable Android crash reports](https://firebase.google.com/docs/crashlytics/android/get-deobfuscated-reports)
