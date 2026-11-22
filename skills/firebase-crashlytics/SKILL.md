@@ -46,8 +46,12 @@ and inspect its `_work` folder too; it is separate from the development
 workspace. Actions can put the checkout under a second `ios` directory. Then
 check another known build host when the original host is uncertain.
 
-A copied Simulator app can identify a surviving binary, but it does not
-include the original object files needed to recover its symbols.
+If the original task used a scratch build directory, check that worker's
+scratch folder for its DerivedData or archive. On macOS, a Simulator's
+removed-app cache at `data/Library/Caches/com.apple.containermanagerd/Dead`
+can help identify the original binary when Spotlight finds nothing. A copied
+Simulator app does not include the original object files needed to recover
+its symbols.
 Check the app executable and, for Xcode debug builds, its `.debug.dylib` too:
 
 ```sh
@@ -64,8 +68,10 @@ artifact stores were checked. Hiding its warning does not restore the crashes.
 Read [Firebase's Apple symbol guide](https://firebase.google.com/docs/crashlytics/ios/get-deobfuscated-reports)
 when configuring a build phase or investigating an upload failure. Cue OS's
 release workflow already calls `ios/scripts/upload-dsyms.sh` with its archive
-and DerivedData paths. Development builds also need dSYM generation and the
-Firebase SDK's `Crashlytics/run` phase.
+and DerivedData paths. The
+[iOS build phase](https://github.com/cueos/ios/blob/main/scripts/upload-crashlytics-symbols.sh)
+runs Firebase's uploader for Release builds targeting physical devices.
+Debug and Simulator builds can generate dSYMs locally and skip that upload.
 
 The SDK run phase validates synchronously and uploads in the background; a
 successful build alone does not prove Firebase processed its symbols. Confirm
